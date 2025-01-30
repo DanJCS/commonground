@@ -1,3 +1,28 @@
+"""
+File: CG_source.py
+
+Summary:
+    CG_source.py provides the foundational classes and core functions for the agent-based model (ABM).
+    It defines:
+        * A variety of metrics (_metric_normdiff, _metric_absdiff, etc.) used to measure differences or similarities between agents' state vectors.
+        * A Config class to store all simulation parameters (number of agents, timesteps, graph structure, etc.).
+        * An Agent class that models an individual participant in the ABM, including how it updates or sends information.
+        * A RecordBook class that records simulation data (agent states, acceptance rates, similarity metrics over time, etc.).
+    It also includes helper functions for computing probability distributions, updating agent states, and recording simulation results.
+
+Dependencies:
+    * Python built-ins: math, os, random, logging
+    * Third-party: numpy, networkx, community (community_louvain), matplotlib
+
+Usage:
+    This script is not typically called directly via the command line. Instead, import it into other scripts.
+
+Example:
+    from CG_source import Config, Agent, RecordBook
+    config = Config(n=100, m=10, timesteps=1000, ...)  # supply needed params
+    agent = Agent(...)
+
+"""
 import math
 import os
 import random

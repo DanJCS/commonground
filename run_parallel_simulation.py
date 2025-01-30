@@ -1,3 +1,24 @@
+"""
+File: run_parallel_simulation.py
+
+Summary:
+    Orchestrates parallel parameter sweeps for the ABM, distributing simulations across multiple CPU cores.
+    Leverages 'run_simulation_with_params' from 'natural_simulation.py' to run each simulation.
+
+Key Functions:
+    * run_single_sim(arg): Wrapper for parallel execution.
+    * parameter_sweep_parallel(parameter_grid, repetitions, output_dir="results", processes=None)
+      - Generates tasks for each param combination x repetition, runs them in parallel.
+
+Dependencies:
+    * Python built-ins: os, json, math, random, itertools, datetime, argparse
+    * Third-party: multiprocessing, tqdm
+    * Internal: natural_simulation (run_simulation_with_params), CG_source
+
+Usage:
+    python run_parallel_simulation.py input_dir output_dir --processes 8 --repetitions 50
+
+"""
 import os
 import json
 import math

@@ -1,3 +1,29 @@
+"""
+File: natural_simulation.py
+
+Summary:
+    Provides the main simulation driver for the ABM.
+    Includes functions to create agents, load random graphs, and run full simulations.
+
+Key Functions:
+    * create_agent_list(n, m, alpha_dist, a, alpha, bi, bj, eps)
+    * load_random_graph(graph_dir)
+    * run_simulation_with_params(params, repetition_index)
+    * parameter_sweep(parameter_grid, repetitions, output_dir)
+
+Dependencies:
+    * CG_source (import Config, Agent, RecordBook, beta_extended)
+    * Python built-ins: os, random, json, pickle
+    * Third-party: numpy, networkx
+
+Usage:
+    Run directly: python natural_simulation.py
+    or import its functions in another script:
+
+    from natural_simulation import run_simulation_with_params
+    results = run_simulation_with_params(params, 0)
+
+"""
 import math
 import os
 import random

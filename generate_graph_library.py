@@ -1,3 +1,24 @@
+"""
+File: generate_graph_library.py
+
+Summary:
+    Generates a library of power-law cluster graphs via NetworkX, then pickles each for reuse.
+
+Key Function:
+    * generate_graph_library(output_dir="graphs_library_high_cluster", library_size=500, n=500, m=6, p=0.9)
+      - Creates random power-law cluster graphs and saves them in `output_dir`.
+
+Dependencies:
+    * Python built-ins: os, pickle
+    * Third-party: networkx
+
+Usage:
+    python generate_graph_library.py
+    # or
+    from generate_graph_library import generate_graph_library
+    generate_graph_library("my_graphs", 100, 100, 5, 0.3)
+
+"""
 import os
 import pickle
 import networkx as nx
