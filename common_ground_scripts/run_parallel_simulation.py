@@ -121,17 +121,17 @@ if __name__ == "__main__":
     # Example parameter grid (this can also be loaded from input_dir if required)
     parameter_grid = {
         "n": [500],
-        "m": [10],
+        "m": [2],
         "timesteps": [5000],
-        "bi": [7],
-        "bj": [7],
+        "bi": [4],
+        "bj": [4],
         "a": [0.5],
         "alpha": [0.1],
-        "eps": [0.1,0.2,0.3,0.4,0.5],
+        "eps": [0.1,0.5],
         "sigma_coeff": [10],
         "zeta": [0],
         "eta": [0.5],
-        "gamma": [0],
+        "gamma": [-1,0,1],
         "metric_method": ["pdiff"],
         "alpha_dist": ["static"]
     }
