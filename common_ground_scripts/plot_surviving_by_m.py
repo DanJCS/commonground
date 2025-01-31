@@ -1,3 +1,48 @@
+"""
+File: plot_surviving_by_m.py
+
+Summary:
+    Summarizes and visualizes how the number of surviving pieces of information
+    changes as 'm' (the dimensionality or length of the agent's state vector)
+    varies. The script loads JSON result files, calculates how many pieces
+    survive by the end of each run, then groups results by all other parameters
+    (excluding 'm'). For each group, it produces a line plot of survival counts
+    vs. 'm', along with 90% confidence intervals and an optional linear fit.
+
+Key Functions:
+    * load_simulation_results(results_dir):
+        Loads .json files from disk, each containing simulation output.
+
+    * make_param_key_excl_m(params: dict, exclude_keys=None):
+        Builds a key from simulation parameters excluding 'm' and any
+        additional specified keys. This key identifies a “major group”
+        for aggregated plotting.
+
+    * compute_survival_counts(results_dir, survival_threshold=0.5, min_fraction=0.1):
+        Uses `count_surviving_info` from `surviving_information` to compute
+        how many pieces of information survive in each run. Groups runs by the
+        “major group” and stores the counts separately for each unique value of m.
+
+    * summarize_survival_data(grouped_data):
+        For each major group and each value of 'm', computes the mean number
+        of survived pieces along with a 90% confidence interval.
+
+    * plot_survival_vs_m(results_for_plot, output_dir):
+        Generates and saves line plots of surviving info vs. 'm', including
+        error bars (for 90% CI) and a linear fit line with its equation.
+
+Dependencies:
+    * Python built-ins: os, json, math, argparse
+    * Third-party: numpy, matplotlib
+    * Internal: surviving_information (import count_surviving_info)
+
+Usage:
+    python plot_surviving_by_m.py <results_dir> <output_dir> [--threshold 0.5] [--fraction 0.1]
+
+    This script saves the resulting line plots of surviving info vs. 'm'
+    to <output_dir>, one for each “major group” of parameters.
+"""
+
 import os
 import json
 import math

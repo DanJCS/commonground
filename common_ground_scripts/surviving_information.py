@@ -1,3 +1,39 @@
+"""
+File: surviving_information.py
+
+Summary:
+    Analyzes simulation results to determine how many pieces of information
+    in the agents' common ground have “survived” by the end of each run.
+    The script loads JSON output files produced by the simulation, counts how
+    many information dimensions exceed a given threshold in at least a specified
+    fraction of agents, and groups/aggregates these counts by simulation parameters.
+
+Key Functions:
+    * load_simulation_results(results_dir):
+        Loads all .json files in the specified directory into memory.
+    * make_param_key(params_dict):
+        Creates a sorted tuple of (param, value) pairs to identify a parameter set,
+        excluding fields that are irrelevant to grouping.
+    * count_surviving_info(final_moving_avg, survival_threshold=0.5, min_fraction=0.1):
+        Counts how many information dimensions in the final state vectors
+        exceed 'survival_threshold' for at least 'min_fraction' of agents.
+    * analyze_survival_across_results(results_dir, survival_threshold=0.5, min_fraction=0.1):
+        Loads simulation results, counts surviving info across runs, and groups results
+        by parameter sets. Prints out average survival counts by parameters.
+
+Dependencies:
+    * Python built-ins: os, json, argparse
+    * Internal:
+        - Assumes JSON files have "params" and "final_moving_avg" fields
+          (as produced by run_parallel_simulation.py and natural_simulation.py).
+
+Usage:
+    # Example command-line usage:
+    python surviving_information.py results_dir --threshold 0.5 --fraction 0.1
+
+    # This loads JSONs from 'results_dir' and prints how many pieces of info survived
+    # for each parameter set, as well as the average survival.
+"""
 
 import os
 import json

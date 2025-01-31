@@ -1,11 +1,46 @@
 #!/usr/bin/env python3
 """
-analyze_clusters.py
+File: analyze_clusters.py
 
-Use chosen HDBSCAN hyperparams to cluster each .json's NxN distance matrix,
-then analyze the #clusters, cluster sizes, etc. Possibly plot results vs. ABM params.
+Summary:
+    Performs cluster analysis on simulation results using HDBSCAN.  The script loads 
+    precomputed distance matrices from JSON files, applies HDBSCAN clustering with 
+    specified hyperparameters, and analyzes the resulting cluster structures. It 
+    calculates the number of clusters, optionally groups the results by an ABM parameter,
+    and can generate plots to visualize the relationship between cluster characteristics
+    and ABM parameters.
 
-Parallelized version using multiprocessing.Pool + tqdm for progress bars.
+Key Functions:
+    * compute_num_clusters(dist_mat, min_cluster_size, min_samples):
+        Calculates the number of clusters (excluding noise) from a distance matrix
+        using HDBSCAN with given hyperparameters.
+    * process_single_file(args):
+        Worker function for parallel processing. Loads a JSON file, computes the distance
+        matrix, performs clustering, and returns the number of clusters and grouping value.
+    * main():
+        Handles command-line arguments, loads data, distributes tasks for parallel 
+        processing, aggregates results, and optionally generates plots.
+
+Dependencies:
+    * Python built-ins: os, json, math, multiprocessing, statistics
+    * Third-party: numpy, hdbscan, tqdm
+    * Internal: pairwise_similarity, plot_utils
+
+Usage:
+    python analyze_clusters.py <input_dir> [--method jsd/euclidean/cosine] 
+                                 [--temperature 1.0] 
+                                 [--min_cluster_size 50] 
+                                 [--min_samples 10] 
+                                 [--n_jobs 4] 
+                                 [--group_by_param gamma]
+
+    Where:
+        - <input_dir> is the directory containing the JSON files with distance matrices.
+        - --method specifies the distance metric used (default: jsd).
+        - --temperature sets the softmax temperature (default: 1.0).
+        - --min_cluster_size and --min_samples are HDBSCAN hyperparameters.
+        - --n_jobs controls the number of parallel processes.
+        - --group_by_param specifies an ABM parameter for grouping results.
 """
 
 import os

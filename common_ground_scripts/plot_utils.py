@@ -1,9 +1,35 @@
 #!/usr/bin/env python3
 """
-plot_utils.py
+File: plot_utils.py
 
-Utility functions for plotting results from HDBSCAN grid search,
-and cluster analysis vs. ABM parameters.
+Summary:
+    Provides utility functions for visualizing data related to HDBSCAN clustering
+    and cluster analysis in the context of Agent-Based Modeling (ABM) simulations.
+    Includes functions to generate plots from HDBSCAN grid search results and
+    to visualize the relationship between cluster analysis metrics and ABM parameters.
+
+Key Functions:
+    * plot_hdbscan_gridsearch(param_grid, summary, outfile):
+        Generates a heatmap visualizing the mean silhouette scores for different
+        combinations of HDBSCAN hyperparameters (min_cluster_size, min_samples).
+    * plot_clusters_vs_parameter(x_vals, y_means, y_low, y_high, param_name, outfile):
+        Creates a line plot showing the relationship between an ABM parameter
+        and the mean number of clusters, with error bars representing confidence intervals.
+
+Dependencies:
+    * Python built-ins: None
+    * Third-party: matplotlib, numpy
+
+Usage:
+    This script is not intended to be run directly. Its functions are designed to be
+    imported and used in other scripts for visualization purposes.
+
+Example:
+    from plot_utils import plot_hdbscan_gridsearch
+
+    #... (code to generate param_grid and summary)...
+
+    plot_hdbscan_gridsearch(param_grid, summary)
 """
 
 import matplotlib.pyplot as plt

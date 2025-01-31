@@ -1,16 +1,64 @@
 #!/usr/bin/env python3
 """
-pairwise_similarity.py
+File: pairwise_similarity.py
 
-Utilities for loading final_moving_avg from ABM .json output,
-then computing NxN distance matrices using various metrics:
-  - Jensen-Shannon Divergence
-  - Euclidean Distance
-  - (1 - Cosine Similarity)
+Summary:
+    Computes pairwise distance (or similarity) matrices among agents (nodes) based on their
+    final state vectors, which are converted to probability distributions via softmax. The
+    script supports multiple distance metrics (Jensen-Shannon Divergence, Euclidean, 1 - Cosine)
+    and can process multiple simulation JSON files in parallel.
 
-Now uses 'multiprocessing.Pool' + 'tqdm' for a progress bar,
-instead of joblib + tqdm_joblib.
+Key Functions:
+    * load_final_moving_avg(json_file: str) -> dict:
+        Loads a JSON file and returns the 'final_moving_avg' data as a dictionary
+        { agent_name -> np.array([...]) }. Returns None if missing.
+
+    * softmax(x, temperature=1.0, epsilon=1e-15) -> np.ndarray:
+        Converts an array of values into a probability distribution
+        (optionally temperature-scaled).
+
+    * build_distance_matrix(final_moving_avg, method="jsd", temperature=1.0) -> (np.ndarray, list):
+        Given the final_moving_avg dict, first applies softmax to each agent’s vector,
+        then computes an NxN pairwise distance matrix using the specified method:
+          - "jsd" for Jensen-Shannon Divergence
+          - "euclidean" for Euclidean distance
+          - "cosine" for 1 - Cosine similarity
+        Returns (distance_matrix, sorted_agent_names).
+
+    * process_single_file(args) -> (str, np.ndarray, list):
+        A parallelizable worker function that:
+          1) Loads a single JSON result.
+          2) Builds the NxN distance matrix using build_distance_matrix.
+          3) Optionally saves the matrix as a .npy file in the output directory.
+        Returns the filename, distance matrix, and agent name list.
+
+    * precompute_distance_for_directory(input_dir, method="jsd", temperature=1.0,
+                                        output_dir=None, n_jobs=1) -> list:
+        Iterates over all .json files in input_dir, computing and optionally saving
+        NxN distance matrices in parallel. Returns a list of (filename, matrix, agent_names)
+        for all processed files.
+
+Output Format:
+    - If 'output_dir' is provided, each computed NxN distance matrix is saved as a .npy file
+      (e.g., my_sim_result_jsd_dist.npy).
+    - The script also returns a Python list of tuples:
+        (json_filename, distance_matrix, agent_names)
+      for each JSON file it processes.
+
+Dependencies:
+    * Python built-ins: os, json, math
+    * Third-party: numpy, multiprocessing, tqdm
+    * It is commonly used after simulations to transform agents' final states into
+      pairwise distance matrices for further clustering or analysis.
+
+Usage:
+    # Command-line usage example:
+    python pairwise_similarity.py <input_dir> [--method jsd] [--temperature 1.0] [--output_dir ./dist_mats] [--n_jobs 4]
+
+    # This will scan <input_dir> for .json files, compute NxN distance matrices using
+    # the chosen metric, save them in ./dist_mats (if provided), and output relevant info.
 """
+
 
 import os
 import json
@@ -49,11 +97,13 @@ def load_final_moving_avg(json_file: str) -> Dict[str, np.ndarray]:
 ###############################################################################
 # 2. Softmax utility (with temperature)
 ###############################################################################
-def softmax(x, temperature=1.0, epsilon=1e-15):
+def softmax(x, temperature=0.2, epsilon=1e-15):
     """
     Compute the softmax of vector x with temperature T.
 
     If x is all zeros, we return a uniform distribution.
+    
+    (T = 1/beta)
     """
     if temperature <= 0:
         raise ValueError("Temperature must be > 0.")
@@ -80,7 +130,7 @@ def _kl_divergence(p, q, epsilon=1e-15):
 def js_divergence(p, q, epsilon=1e-15):
     """Jensen–Shannon Divergence."""
     m = 0.5 * (p + q)
-    return 0.5 * _kl_divergence(p, m, epsilon=epsilon) + 0.5 * _kl_divergence(q, m, epsilon=epsilon)
+    return math.sqrt(0.5 * _kl_divergence(p, m, epsilon=epsilon) + 0.5 * _kl_divergence(q, m, epsilon=epsilon))
 
 def euclidean_distance(p, q):
     """Euclidean distance."""

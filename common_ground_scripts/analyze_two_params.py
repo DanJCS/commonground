@@ -1,52 +1,81 @@
+#!/usr/bin/env python3
+"""
+File: analyze_two_params.py
+
+Summary:
+    Analyzes how two chosen ABM parameters (param1 and param2) jointly affect the number
+    of surviving pieces of information by the end of each simulation run. This script
+    groups runs by all other parameters (the "major group") and, for each major group,
+    produces a 2D heatmap plotting param1 on the X-axis and param2 on the Y-axis.
+    Each cell in the heatmap shows the mean count (and variance) of surviving information.
+
+Key Functions:
+    * load_results(input_dir):
+        Loads .json simulation files, returning a list of dictionaries.
+    * make_major_key(params, param1, param2):
+        Extracts and sorts all parameter entries except param1 and param2,
+        treating them as a unique "major group" identifier.
+    * main():
+        - Reads command-line arguments to locate input files, param1, param2, etc.
+        - Builds nested dictionaries: major_group -> {(param1_val, param2_val) -> [survival_counts]}.
+        - For each major group, constructs a heatmap that visualizes the mean (and variance) of survived info
+          for each combination of param1 and param2.
+
+Dependencies:
+    * Python built-ins: os, json, argparse, collections (defaultdict)
+    * Third-party: matplotlib, numpy
+    * Internal:
+        - Surviving_information (import count_surviving_info)
+
+Usage:
+    python analyze_two_params.py <input_dir> <param1> <param2> <output_dir> \
+        [--threshold 0.5] [--fraction 0.1]
+
+    Where:
+      <input_dir> contains the .json result files.
+      <param1> is the name of the first ABM parameter for the X-axis.
+      <param2> is the name of the second ABM parameter for the Y-axis.
+      <output_dir> is where heatmaps will be saved.
+      --threshold and --fraction control the survival logic (optional).
+"""
+
+# Advice on potential redundancy with plot_surviving_by_m.py:
+"""
+- **plot_surviving_by_m.py** focuses on a single parameter (m) against the
+  number of surviving pieces, generating a line plot with confidence intervals.
+- **analyze_two_params.py** allows you to pick any two parameters (including “m” 
+  as one of them) and produces 2D heatmaps.
+
+They each serve slightly different purposes:
+- `plot_surviving_by_m.py` specifically builds a line plot for m vs. survival counts,
+  possibly grouping by other parameters in the background.
+- `analyze_two_params.py` is more general, letting you pick any two parameters 
+  and produce a heatmap.
+
+Hence, `analyze_two_params.py` does not necessarily make `plot_surviving_by_m.py` 
+redundant. While you could analyze “m” as one of the two parameters in the heatmap, 
+you might lose the specialized features of `plot_surviving_by_m.py` 
+(such as line plots, linear fits, and direct analysis on a single dimension).
+In other words, they can complement each other rather than replace one another.
+"""
+
+
 import os
 import json
 import argparse
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.table import Table
 from collections import defaultdict
+from typing import Dict, List, Tuple
+
+# Import the survival counting function from the helper module
+from surviving_information import count_surviving_info
 
 ###############################################################################
-# 1. count_surviving_info (reusing from your existing logic)
+# 1. Helper: load_results
 ###############################################################################
-def count_surviving_info(final_moving_avg, survival_threshold=0.5, min_fraction=0.1):
-    """
-    Given final_moving_avg (dict: agent_name -> list of length m),
-    determine how many 'pieces of information' survive.
-
-    Survival criterion:
-      - At least `min_fraction` of agents must have final_moving_avg[i] > `survival_threshold`
-      - i is the index of the piece of info in each agent's vector.
-
-    Returns an integer: the count of survived pieces.
-    """
-    agent_names = list(final_moving_avg.keys())
-    num_agents = len(agent_names)
-    if num_agents == 0:
-        return 0  # avoid divide-by-zero
-
-    # Assume each agent has a vector of length m
-    m = len(final_moving_avg[agent_names[0]])
-
-    survived_count = 0
-    cutoff_count = int(min_fraction * num_agents)
-
-    for i in range(m):
-        above_threshold = sum(
-            1
-            for agent in agent_names
-            if final_moving_avg[agent][i] > survival_threshold
-        )
-        if above_threshold >= cutoff_count:
-            survived_count += 1
-
-    return survived_count
-
-###############################################################################
-# 2. Helper: load JSON results
-###############################################################################
-def load_results(input_dir):
+def load_results(input_dir: str) -> List[dict]:
     """
     Loads all .json files from input_dir and returns a list of dictionaries.
     Each dict is expected to have at least:
@@ -65,9 +94,9 @@ def load_results(input_dir):
     return results
 
 ###############################################################################
-# 3. Group by "major" (excluding param1, param2)
+# 2. make_major_key
 ###############################################################################
-def make_major_key(params, param1, param2):
+def make_major_key(params: dict, param1: str, param2: str) -> Tuple[Tuple[str, str], ...]:
     """
     Build a tuple of (key, value) for all params EXCEPT param1 and param2, sorted by key name.
     This key identifies the 'major group'.
@@ -77,7 +106,7 @@ def make_major_key(params, param1, param2):
     return tuple(sorted(filtered.items()))
 
 ###############################################################################
-# 4. Main script
+# 3. Main script
 ###############################################################################
 def main():
     parser = argparse.ArgumentParser(description="Analyze how two parameters interplay in surviving info.")
@@ -126,6 +155,9 @@ def main():
     major_groups = defaultdict(lambda: defaultdict(list))
 
     for entry in all_data:
+        if "params" not in entry or "final_moving_avg" not in entry:
+            continue
+
         params = entry["params"]
         final_moving_avg = entry["final_moving_avg"]
 
@@ -137,7 +169,7 @@ def main():
         val2 = params.get(args.param2, None)
         minor_key = (val1, val2)
 
-        # Compute survival count for this run
+        # Compute survival count for this run using the imported function
         survived_count = count_surviving_info(
             final_moving_avg,
             survival_threshold=args.threshold,
@@ -155,14 +187,14 @@ def main():
         param2_vals = sorted(set(p[1] for p in all_pairs if p[1] is not None), reverse=True)
 
         # Build a 2D matrix (heatmap_data) for mean survival
-        # and another for variance
+        # and another for variance (optional)
         heatmap_data = np.zeros((len(param2_vals), len(param1_vals)), dtype=float)
         heatmap_var = np.zeros((len(param2_vals), len(param1_vals)), dtype=float)
 
         for r_idx, val2 in enumerate(param2_vals):
             for c_idx, val1 in enumerate(param1_vals):
                 counts = minor_dict.get((val1, val2), [])
-                if len(counts) > 0:
+                if counts:
                     arr = np.array(counts, dtype=float)
                     heatmap_data[r_idx, c_idx] = arr.mean()
                     heatmap_var[r_idx, c_idx] = arr.var()
@@ -203,40 +235,15 @@ def main():
                         fontsize=9
                     )
 
-        # 5. Add a small table below the plot to display major group parameters
-        # Convert major_key (a tuple of (key, value)) into a table:
-        major_dict = dict(major_key)
-        # Build table data with a header row, e.g. ("Param", "Value")
-        table_data = [("Parameters", "Value")] + list(major_dict.items())
-
-        # Create the table; 'bbox' adjusts the position below the plot
-        the_table = ax.table(
-            cellText=table_data,
-            loc="bottom",
-            cellLoc="center",
-            colLabels=None,
-            bbox=[0.0, -0.6, 1.0, 0.5]  # tweak as needed (x, y, width, height)
-        )
-        # Adjust font sizes
-        the_table.auto_set_font_size(False)
-        the_table.set_fontsize(8)
-
-        # Increase bottom margin to make room for the table
-        plt.subplots_adjust(bottom=0.3)
-
-        # 6. Save the figure
-        filename_parts = [f"{k}{v}" for k, v in major_key]
-        major_str = "_".join(filename_parts) if filename_parts else "default"
-        outfile = os.path.join(args.output_dir, f"heatmap_{major_str}.png")
         plt.tight_layout()
+        outfile = os.path.join(
+            args.output_dir,
+            f"heatmap_{abs(hash(major_key))}.png"
+        )
         plt.savefig(outfile, dpi=150)
         plt.close()
 
     print("All heatmaps have been saved successfully.")
 
-
-###############################################################################
-# Execute main
-###############################################################################
 if __name__ == "__main__":
     main()
