@@ -2,6 +2,8 @@
 
 This repository contains Python scripts and utilities for running an Agent-Based Model (ABM) designed to study how common ground—mutually accepted information among agents—emerges and evolves over time. The scripts support simulations, parallel parameter sweeps, post-simulation analyses, and visualizations. Common ground forms through a process called "grounding," where agents exchange information dynamically, refining their shared understanding of what is collectively accepted.
 
+*Common ground is the set of mutually accepted information and provides a context to the individuals engaged in a social activity
+
 ### Overview of the Model
 
 Our ABM simulates 500 agents interacting within a Holme-Kim network over T timesteps. Each agent maintains a state vector (sometimes referred to as an x-vector), representing its perception of the common ground. At each timestep, an agent may be selected as a sender (we will denote as $i$) with some probability. The sender then chooses one of its neighbors as a receiver (we will denote as $j$) and transmits a piece of information. The receiver can either accept or reject the information. Depending on a probability factor, the receiver may also provide feedback to the sender regarding the acceptance decision, leading both agents to update their state vectors accordingly.

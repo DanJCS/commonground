@@ -67,6 +67,7 @@ import numpy as np
 from typing import Dict, Tuple, List
 from multiprocessing import Pool
 from tqdm import tqdm
+from scipy.spatial.distance import jensenshannon
 
 ###############################################################################
 # 1. Loading final_moving_avg from JSON
@@ -97,7 +98,7 @@ def load_final_moving_avg(json_file: str) -> Dict[str, np.ndarray]:
 ###############################################################################
 # 2. Softmax utility (with temperature)
 ###############################################################################
-def softmax(x, temperature=0.2, epsilon=1e-15):
+def softmax(x, temperature=0.25, epsilon=1e-15):
     """
     Compute the softmax of vector x with temperature T.
 
@@ -121,16 +122,27 @@ def softmax(x, temperature=0.2, epsilon=1e-15):
 ###############################################################################
 # 3. Distance/Similarity metrics on probability vectors
 ###############################################################################
-def _kl_divergence(p, q, epsilon=1e-15):
-    """Kullback–Leibler divergence KL(p || q)."""
-    p_safe = np.clip(p, epsilon, 1.0)
-    q_safe = np.clip(q, epsilon, 1.0)
+def _kl_divergence(p, q, epsilon=1e-10):
+    # Only clip the lower bound so we don't take log of zero
+    p_safe = np.clip(p, epsilon, None)
+    q_safe = np.clip(q, epsilon, None)
+
+    # *Optionally* renormalize if you want to be extra safe:
+    p_safe /= p_safe.sum()
+    q_safe /= q_safe.sum()
+
     return np.sum(p_safe * np.log(p_safe / q_safe))
 
-def js_divergence(p, q, epsilon=1e-15):
+def js_divergence(p, q, epsilon=1e-10):
     """Jensen–Shannon Divergence."""
     m = 0.5 * (p + q)
-    return math.sqrt(0.5 * _kl_divergence(p, m, epsilon=epsilon) + 0.5 * _kl_divergence(q, m, epsilon=epsilon))
+    val = 0.5 * _kl_divergence(p, m) + 0.5 * _kl_divergence(q, m)
+    
+    if val < 0:
+        print(f"WARNING: Negative value encountered in JSD calculation: {val}")
+
+    val = max(val, 0.0)
+    return math.sqrt(val)
 
 def euclidean_distance(p, q):
     """Euclidean distance."""

@@ -204,8 +204,8 @@ def main():
     args = parser.parse_args()
 
     # Define your search space:
-    min_cluster_sizes = [20,30,40,50,60,70,80,90,100]
-    min_samples_vals  = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+    min_cluster_sizes = [15,20,25,30,35,40,45,50]
+    min_samples_vals  = [5,8,11,14,17,20,23,26]
     param_grid = [(mcs, ms) for mcs in min_cluster_sizes for ms in min_samples_vals]
 
     # 1. Gather all .json in input_dir & group by ABM param_key
