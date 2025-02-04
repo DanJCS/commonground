@@ -154,13 +154,13 @@ class Config:
         a: float,
         alpha: float,
         eps: float,
-        sigma_coeff: float,
+        sigma: float,     # now directly provided
         zeta: float,
         eta: float,
         gamma: float,
         G: nx.Graph,
     ) -> None:
-        # Basic validation
+        # Basic validation (unchanged)
         if n <= 0:
             raise ValueError("Number of agents (n) must be positive.")
         if m <= 0:
@@ -171,9 +171,9 @@ class Config:
             raise ValueError("Activation probability (a) should be in [0,1].")
         if not (0.0 <= alpha <= 1.0):
             raise ValueError("Alpha value out of [0,1].")
-        if not zeta in [-1,0,1]:
+        if zeta not in [-1, 0, 1]:
             raise ValueError("Zeta must be one of {-1,0,+1}")
-        # Add more checks if needed (e.g., alpha in [0,1], etc.)
+        # Additional checks can be added as needed
 
         self.n = n
         self.m = m
@@ -183,11 +183,12 @@ class Config:
         self.a = a
         self.alpha = alpha
         self.eps = eps
-        self.sigma = 1 / (self.m * sigma_coeff)
+        self.sigma = sigma   # directly assign sigma
         self.zeta = zeta
         self.eta = eta
         self.gamma = gamma
         self.G = G
+
 
     def __repr__(self) -> str:
         """
