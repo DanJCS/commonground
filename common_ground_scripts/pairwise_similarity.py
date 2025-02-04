@@ -107,17 +107,13 @@ def softmax(x, temperature=0.25, epsilon=1e-15):
     (T = 1/beta)
     """
     if temperature <= 0:
-        raise ValueError("Temperature must be > 0.")
-
+            raise ValueError("Temperature must be > 0.")
+    # Ensure x is a numpy array
+    x = np.array(x, dtype=float)
     scaled_x = x / temperature
     max_val = np.max(scaled_x)
     exps = np.exp(scaled_x - max_val)
-    sum_exps = np.sum(exps)
-
-    if sum_exps < epsilon:
-        return np.ones_like(x) / len(x)
-    else:
-        return exps / sum_exps
+    return exps / np.sum(exps)
 
 ###############################################################################
 # 3. Distance/Similarity metrics on probability vectors
@@ -178,6 +174,10 @@ def build_distance_matrix(final_moving_avg, method="jsd", temperature=1.0):
     prob_distributions = {}
     for name in agent_names:
         vec = final_moving_avg[name]
+        try:
+            vec = np.array(vec, dtype=float)
+        except Exception as e:
+            raise ValueError(f"Cannot convert vector for agent '{name}' to a numpy array: {e}")
         prob_distributions[name] = softmax(vec, temperature=temperature)
 
     # Step 2: fill NxN

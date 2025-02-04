@@ -90,7 +90,7 @@ def run_simulation_with_params(params, repetition_index):
     
     if "graph" not in params or params["graph"] is None:
         # Load a random graph from your library
-        G, graph_file = load_random_graph("singular_graph")
+        G, graph_file = load_random_graph("graphs_library_50")
     else:
         # Use the provided graph
         G = params["graph"]
