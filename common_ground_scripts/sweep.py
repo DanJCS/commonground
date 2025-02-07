@@ -7,9 +7,10 @@ Summary:
     For each combination of parameters (only the swept ones appear in the filename),
     the script runs the simulation (using natural_simulation.run_simulation_with_params)
     and saves the result as a JSON file in the designated output directory.
+    File writing is performed within each worker to improve parallelisation.
     
-    Usage:
-        python3 sweep.py --reps 5 --output_dir sweep_results --n_jobs 4
+Usage:
+    python3 sweep.py --reps 5 --output_dir sweep_results --n_jobs 4
 """
 
 import os
@@ -34,7 +35,7 @@ def get_swept_keys(param_grid):
 def generate_output_filename(combination_dict, rep, output_dir):
     """
     Generate an output filename based on the swept parameters and the repetition index.
-    Only include parameters whose values vary (i.e. those with more than one value in the grid).
+    Only include parameters whose values vary (i.e. those with more than one candidate value in the grid).
     
     Example filename:
        eps0.5_gamma1_rep0.json
@@ -54,17 +55,25 @@ def run_single_simulation(args_tuple):
     Worker function for a single simulation run.
     
     Args:
-        args_tuple: (combination_dict, rep)
-        
-    Returns:
-        (combination_dict, rep, simulation_result)
+        args_tuple: (combination_dict, rep, output_dir)
+    
+    Behavior:
+      - Merge constant parameters from SIM_PARAMS with the current swept combination.
+      - Run the simulation using run_simulation_with_params.
+      - Generate the output filename based on the swept parameters and repetition index.
+      - Write the simulation result to the JSON file.
+      - Return the output filename.
     """
-    combination_dict, rep = args_tuple
-    # Merge constant parameters from SIM_PARAMS with the current swept combination.
+    combination_dict, rep, output_dir = args_tuple
+    # Merge constant parameters with the current combination.
     params = SIM_PARAMS.copy()
     params.update(combination_dict)
     sim_result = run_simulation_with_params(params, rep)
-    return (combination_dict, rep, sim_result)
+    
+    output_filename = generate_output_filename(combination_dict, rep, output_dir)
+    with open(output_filename, "w") as f:
+        json.dump(sim_result, f, indent=4)
+    return output_filename
 
 def main():
     parser = argparse.ArgumentParser(
@@ -92,20 +101,18 @@ def main():
     tasks = []
     for combination in combination_dicts:
         for rep in range(args.reps):
-            tasks.append((combination, rep))
+            tasks.append((combination, rep, args.output_dir))
     
     total_tasks = len(tasks)
     print(f"Running parameter sweep with {total_tasks} tasks using {args.n_jobs} processes...")
     
-    # Run the simulations in parallel.
+    # Run simulations in parallel and update progress.
     with Pool(processes=args.n_jobs) as pool:
-        for combo_dict, rep, sim_result in tqdm(pool.imap_unordered(run_single_simulation, tasks),
-                                                  total=total_tasks,
-                                                  desc="Running simulations"):
-            # Generate output filename based on the swept parameters and rep index.
-            output_filename = generate_output_filename(combo_dict, rep, args.output_dir)
-            with open(output_filename, "w") as f:
-                json.dump(sim_result, f, indent=4)
+        for output_filename in tqdm(pool.imap_unordered(run_single_simulation, tasks),
+                                    total=total_tasks,
+                                    desc="Running simulations"):
+            # Each worker writes its own output; we simply update the progress bar.
+            pass
     
     print(f"Parameter sweep complete. Results saved in directory: {args.output_dir}")
 

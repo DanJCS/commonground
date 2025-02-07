@@ -24,11 +24,11 @@ timesteps = 5000
 beta_parameter = 5.0
 activation_probability = 0.5
 alpha_value = 0.2
-epsilon_value = 0.1
-sigma = 0.01
+epsilon_value = 0.5
+sigma = 0.05
 zeta_value = 0
 eta_value = 0.5
-gamma_value = -1.0
+gamma_value = 0.0
 metric_method = "pdiff"
 alpha_distribution_type = "static"  # could be "static", "beta", or "uniform"
 
@@ -53,14 +53,14 @@ SIM_PARAMS = {
 # Define a parameter grid (all values here are static; you can extend these if needed)
 PARAMETER_GRID = {
     "n": [resolve_param(n_agents)],
-    "m": [2,3,4,5],
+    "m": [2,3,4],
     "timesteps": [resolve_param(timesteps)],
     "bi": [resolve_param(beta_parameter)],
     "bj": [resolve_param(beta_parameter)],
     "a": [resolve_param(activation_probability)],
     "alpha": [resolve_param(alpha_value)],
     "eps": [resolve_param(epsilon_value)],
-    "sigma": [i*0.02 for i in range(0,31)],
+    "sigma": [0.005,0.01,0.015,0.02,0.03,0.04,0.05,0.08,0.1,0.15,0.2,0.3],
     "zeta": [resolve_param(zeta_value)],
     "eta": [resolve_param(eta_value)],
     "gamma": [resolve_param(gamma_value)],
