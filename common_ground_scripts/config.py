@@ -60,7 +60,7 @@ PARAMETER_GRID = {
     "a": [resolve_param(activation_probability)],
     "alpha": [resolve_param(alpha_value)],
     "eps": [resolve_param(epsilon_value)],
-    "sigma": [0.005,0.01,0.015,0.02,0.03,0.04,0.05,0.08,0.1,0.15,0.2,0.3],
+    "sigma": [0.005,0.01,0.015,0.02,0.03,0.04,0.05,0.08,0.1,0.15,0.2,0.3,0.4],
     "zeta": [resolve_param(zeta_value)],
     "eta": [resolve_param(eta_value)],
     "gamma": [resolve_param(gamma_value)],
