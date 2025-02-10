@@ -24,11 +24,11 @@ timesteps = 5000
 beta_parameter = 5.0
 activation_probability = 0.5
 alpha_value = 0.2
-epsilon_value = 0.5
+epsilon_value = 0.1
 sigma = 0.05
 zeta_value = 0
 eta_value = 0.5
-gamma_value = 0.0
+gamma_value = -1.0
 metric_method = "pdiff"
 alpha_distribution_type = "static"  # could be "static", "beta", or "uniform"
 
@@ -59,11 +59,11 @@ PARAMETER_GRID = {
     "bj": [resolve_param(beta_parameter)],
     "a": [resolve_param(activation_probability)],
     "alpha": [resolve_param(alpha_value)],
-    "eps": [resolve_param(epsilon_value)],
-    "sigma": [0.005,0.01,0.015,0.02,0.03,0.04,0.05,0.08,0.1,0.15,0.2,0.3,0.4],
+    "eps": [0,0.1,0.2,0.3,0.4,0.5],
+    "sigma": [0.08],
     "zeta": [resolve_param(zeta_value)],
     "eta": [resolve_param(eta_value)],
-    "gamma": [resolve_param(gamma_value)],
+    "gamma": [-1.0,-0.9,-0.8,-0.7,-0.6,-0.5,-0.4,-0.3,-0.2,-0.1,0.0],
     "metric_method": [resolve_param(metric_method)],
     "alpha_dist": [resolve_param(alpha_distribution_type)],
 }

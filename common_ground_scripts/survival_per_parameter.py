@@ -51,6 +51,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict
 from statistics import mean, stdev
+from tqdm import tqdm
 import math
 
 # Import the survival counting function from surviving_information.py
@@ -64,7 +65,7 @@ def parse_json_files(input_dir):
         A list of dictionaries, one per JSON file.
     """
     results = []
-    for fname in os.listdir(input_dir):
+    for fname in tqdm(os.listdir(input_dir), desc="Loading JSON files"):
         if fname.endswith(".json"):
             path = os.path.join(input_dir, fname)
             with open(path, "r") as f:
@@ -158,7 +159,7 @@ def plot_survival_vs_parameter(aggregated, interesting_param, secondary_param=No
     plt.figure(figsize=(8, 6))
     
     if secondary_param:
-        for sec_val, inner_dict in aggregated.items():
+        for sec_val, inner_dict in sorted(aggregated.items(), key=lambda item: item[0]):
             x_vals = sorted(inner_dict.keys())
             y_means = []
             y_err_lower = []
