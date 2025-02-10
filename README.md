@@ -39,13 +39,6 @@ In brief:
 - **Study Network Influence** by generating or loading various network structures (e.g., power-law cluster graphs).
 - **Benchmark** different ABM parameters (like agent rationality, network connectivity, memory decay, etc.) and see their effects on emergent outcomes. In particular, we are interested in the gamma and epsilon parameters.
 
-### Immediate tasks:
-
-- To determine a stable hyperparameter values (mcs and ms) for HDBSCAN
-- Use HDBSCAN to partition the agents to clusters that share a common ground
-- Visualise the partitioned network using Pyvis. Colour-code different clusters and study where/how many clusters occur
-- Conduct analyses to study how well-separated the clusters are.
-
 ---
 
 ## Repository Structure
@@ -53,81 +46,204 @@ In brief:
 ```
 danjcs-commonground/
 ├── common_ground_scripts/
-│   ├── README.md
-│   ├── CG_source.py
-│   ├── analyze_clusters.py
-│   ├── analyze_two_params.py
-│   ├── generate_graph_library.py
-│   ├── natural_simulation.py
-│   ├── pairwise_similarity.py
-│   ├── plot_surviving_by_m.py
-│   ├── plot_utils.py
-│   ├── run_parallel_simulation.py
-│   └── surviving_information.py
+│   ├── README.md                     # This README file
+│   ├── CG_source.py                  # Foundational classes & functions (Config, Agent, RecordBook)
+│   ├── analyze_clusters.py           # Clusters final agent states using HDBSCAN
+│   ├── analyze_two_params.py         # Generates heatmaps to analyze the interplay of two parameters on surviving info
+│   ├── cluster_analysis.py           # Exports clustered networks (with HDBSCAN) to GEXF for Gephi visualization
+│   ├── config.py                     # Defines simulation parameters and parameter grid for sweeps
+│   ├── generate_graph_library.py     # Generates and pickles power-law cluster graphs for simulation input
+│   ├── interpreter.py                # Produces scatter plots of agent state vectors at selected timesteps
+│   ├── natural_simulation.py         # Main simulation driver (creates agents, runs simulations, computes moving averages)
+│   ├── pairwise_similarity.py        # Builds NxN distance/similarity matrices from final agent states
+│   ├── plot_distance_matrix.py       # Plots heatmaps of the pairwise distance matrix using Seaborn
+│   ├── plot_surviving_by_m.py        # Plots how surviving information changes with state vector length (m)
+│   ├── plot_utils.py                 # Contains plotting utility functions (e.g., for grid search and cluster vs. parameter plots)
+│   ├── plot_violin.py                # Generates violin/box plots of the distributions of agent state vector values
+│   ├── run.py                        # Single-run simulation driver (using parameters from config.py)
+│   ├── run_parallel_simulation.py    # Orchestrates parallel parameter sweeps using multiprocessing
+│   ├── simulation_record.py          # Runs a simulation and records the full time series of agent state vectors
+│   ├── sweep.py                      # Runs a parameter sweep based on the grid defined in config.py
+│   ├── survival_per_parameter.py     # Analyzes the effect of a chosen parameter on the proportion of surviving info
+│   └── surviving_information.py      # Computes and aggregates counts of surviving pieces of information
 └── utility_scripts/
-    ├── find_optimal_temperature.py
-    └── hdbscan_gridsearch.py
+├── find_beta.py                  # Analyzes how p_send changes with different beta (rationality) values
+├── find_optimal_temperature.py   # Helps identify an optimal softmax temperature via Jensen-Shannon Divergence
+└── hdbscan_gridsearch.py         # Performs a grid search over HDBSCAN hyperparameters for optimal clustering
 ```
 
-1. **common\_ground\_scripts/**
+### Detailed Script Overview
 
-   - **CG\_source.py**\
-     Defines the **foundational classes** and **core functions** for the ABM:
+**common_ground_scripts/README.md**  
+- This file (the README) provides an overall description of the project, model overview, parameter definitions, objectives, repository structure, and instructions for running simulations and analyses.
 
-     - `Config` (stores ABM parameters).
-     - `Agent` (represents each agent’s beliefs, sending behavior, etc.).
-     - `RecordBook` (records simulation data).\
-       Many scripts in this folder depend on `CG_source.py`.
+**common_ground_scripts/CG_source.py**  
+- Provides the foundational classes and helper functions for the ABM.  
+- Defines the `Config` class (for storing simulation parameters), the `Agent` class (which models individual agents including their state vectors and probability distributions for sending/accepting information), and the `RecordBook` class (which records the evolution of agent states and various metrics during simulations).  
+- Includes multiple metric functions to compare agents’ state vectors.
 
-   - **analyze\_clusters.py**\
-     Clusters final agent states using **HDBSCAN** to see how many clusters of agent beliefs form under different hyperparameters. Relies on **pairwise\_similarity.py** (distance matrices) and **plot\_utils.py** (visualization).
+**common_ground_scripts/analyze_clusters.py**  
+- Loads simulation result JSON files and computes pairwise distance matrices between agents’ final state vectors.  
+- Applies HDBSCAN clustering (using user-specified hyperparameters) to the distance matrices to determine the number of clusters formed (ignoring noise).  
+- Optionally groups results by a chosen ABM parameter and generates plots to visualize the clustering behavior.  
+- Supports parallel processing for efficiency.
 
-   - **analyze\_two\_params.py**\
-     Analyzes **two** chosen parameters simultaneously, generating heatmaps to visualize how different pairs of parameter values affect “surviving” information. Depends on `surviving_information.py` to count which pieces of information survived.
+**common_ground_scripts/analyze_two_params.py**  
+- Examines the joint influence of two selected ABM parameters on the survival of information.  
+- Loads simulation results, computes survival counts using criteria defined in `surviving_information.py`, and groups results by the remaining parameters.  
+- Generates 2D heatmaps where one parameter is plotted on the X-axis and the other on the Y-axis, with each cell showing the mean (and variance) of surviving information counts.
 
-   - **generate\_graph\_library.py**\
-     Generates and pickles multiple **power-law cluster graphs**. Used for producing a library of random network structures to feed into the simulations.
+**common_ground_scripts/cluster_analysis.py**  
+- Performs clustering analysis on simulation outputs by applying HDBSCAN to the final moving average state vectors.  
+- Exports the underlying network (with nodes annotated with cluster labels and color-coded using a Matplotlib colormap) to a GEXF file for visualization in tools like Gephi.  
+- Also creates a text summary detailing the number of clusters (excluding noise), the number of noise nodes, and a mapping of clusters to colors.
 
-   - **natural\_simulation.py**\
-     The **main simulation driver**. Contains methods for creating agents (`create_agent_list`), loading random graphs (`load_random_graph`), and running single or multiple ABM simulations (`run_simulation_with_params` & `parameter_sweep`). Depends heavily on `CG_source.py` for agent/config definitions.
+**common_ground_scripts/config.py**  
+- Defines the default simulation parameters (e.g., number of agents, state vector length, timesteps, and behavioral parameters) for a single-run simulation.  
+- Also defines a parameter grid used for parameter sweeps.  
+- Provides a helper function to resolve parameter values (which can be static or callable).
 
-   - **pairwise\_similarity.py**\
-     Builds NxN distance (or similarity) matrices of agent states (often final states) using various metrics (Jensen-Shannon Divergence, Euclidean, Cosine). Used by scripts like **analyze\_clusters.py** and others that require distance computations for clustering or analysis.
+**common_ground_scripts/generate_graph_library.py**  
+- Generates a library of power-law cluster graphs using NetworkX, then pickles (saves) them for later use in simulations.  
+- Allows customization of graph properties such as the number of nodes, clustering factor, and connection probability.
 
-   - **plot\_surviving\_by\_m.py**\
-     Loads simulation outputs and produces **line plots** illustrating how many pieces of information “survive” as the dimension `m` (length of the agent’s state vector) varies, grouped by other parameters.
+**common_ground_scripts/interpreter.py**  
+- Interprets simulation result JSON files to extract agent state vectors.  
+- Generates scatter plots of these state vectors at user-specified timesteps, supporting both raw and moving average data, and can also apply softmax transformation.  
+- Facilitates visual exploration of the simulation’s evolution over time.
 
-   - **plot\_utils.py**\
-     A small collection of **plotting utilities** used for HDBSCAN grid search plots and for comparing cluster metrics vs. ABM parameters.
+**common_ground_scripts/natural_simulation.py**  
+- Serves as the main simulation driver for the ABM.  
+- Creates agents with initialized state vectors, loads or generates a network graph, and simulates interactions over many timesteps.  
+- Records the evolution of agent states (both raw and moving average) and outputs the final results (and optionally the full time series) as a JSON file.
 
-   - **run\_parallel\_simulation.py**\
-     Orchestrates **parallel** parameter sweeps of the ABM. Uses `multiprocessing.Pool` to run multiple simulations concurrently, each with different parameters. Depends on `natural_simulation.py` and `CG_source.py`.
+**common_ground_scripts/pairwise_similarity.py**  
+- Converts final agent state vectors into probability distributions using a softmax function (with an adjustable temperature).  
+- Computes NxN pairwise distance (or similarity) matrices using methods such as Jensen-Shannon Divergence, Euclidean distance, or cosine similarity.  
+- Supports parallel processing and can optionally save the computed matrices as `.npy` files.
 
-   - **surviving\_information.py**\
-     Provides functions to **analyze which pieces of information** survive in the final agent states. It loads JSON outputs from simulations, checks a threshold, and tallies how many pieces are shared by at least a specified fraction of agents.
+**common_ground_scripts/plot_distance_matrix.py**  
+- Loads a simulation result JSON file and uses `pairwise_similarity.py` to compute the distance matrix for the final moving average state vectors.  
+- Creates a heatmap of the pairwise distances using Seaborn, and either displays the plot interactively or saves it to a file.
 
-2. **utility\_scripts/**
+**common_ground_scripts/plot_surviving_by_m.py**  
+- Analyzes how the number of surviving pieces of information changes with the length of the state vector (`m`).  
+- Loads simulation outputs, computes survival counts (using criteria from `surviving_information.py`), and groups the data by other parameters.  
+- Generates line plots with 90% confidence intervals (and an optional linear fit) showing survival trends as `m` varies.
 
-   - **find\_optimal\_temperature.py**\
-     Helps in determining a suitable temperature parameter (for softmax conversions) by computing Jensen-Shannon Divergence (JSD) across a range of temperatures, enabling a user to pick a sweet spot.
+**common_ground_scripts/plot_utils.py**  
+- Contains a collection of plotting utility functions used across the project.  
+- Includes functions for plotting heatmaps (e.g., from HDBSCAN grid search results) and line plots that relate ABM parameters to clustering metrics.
 
-   - **hdbscan\_gridsearch.py**\
-     Performs a more general **grid search** over HDBSCAN hyperparameters (min\_cluster\_size, min\_samples), computing silhouette scores. Summarizes which hyperparameter set yields the best average clustering performance for each ABM parameter set. Uses `pairwise_similarity.py` for distance matrices.
+**common_ground_scripts/plot_violin.py**  
+- Reads a simulation result JSON file and extracts the final moving average state vectors.  
+- Generates violin (or box) plots to visualize the distribution of certainty values for each dimension of the state vector using Seaborn.
+
+**common_ground_scripts/run.py**  
+- A simple, single-run simulation driver that loads simulation parameters from `config.py`.  
+- Runs the simulation (via `natural_simulation.py`) and saves the final simulation result as a JSON file.  
+- Allows the user to specify a repetition index and output filename.
+
+**common_ground_scripts/run_parallel_simulation.py**  
+- Orchestrates parallel parameter sweeps by distributing simulation runs across multiple CPU cores using Python’s multiprocessing.  
+- Uses `run_simulation_with_params` from `natural_simulation.py` to run each simulation concurrently, saving each result as a JSON file.
+
+**common_ground_scripts/simulation_record.py**  
+- Runs a single simulation while recording the full time series of agent state vectors.  
+- Outputs a JSON file that includes simulation parameters, final state vectors, moving averages, and the complete raw time series data.  
+- Intended for detailed post-simulation analyses.
+
+**common_ground_scripts/sweep.py**  
+- Executes a parameter sweep based on the parameter grid defined in `config.py`.  
+- For each combination of parameters and for each repetition, runs a simulation and saves the output as a JSON file.  
+- Facilitates systematic exploration of the model’s behavior across different parameter settings.
+
+**common_ground_scripts/survival_per_parameter.py**  
+- Analyzes how a chosen “interesting parameter” affects the proportion of surviving information.  
+- Loads simulation results, computes survival counts, and calculates the proportion of surviving pieces relative to the state vector length (`m`).  
+- Groups results (and can further group by a secondary parameter) and generates a line plot with 95% confidence intervals.
+
+**common_ground_scripts/surviving_information.py**  
+- Provides functions to determine which pieces of information “survive” in the final agent state vectors.  
+- Uses a survival criterion based on a threshold and a minimum fraction of agents.  
+- Aggregates survival counts across simulation runs and supports grouping by parameter sets.
+
+**utility_scripts/find_beta.py**  
+- Analyzes how the agent’s sending probability distribution (`p_send`) changes as the beta (rationality) parameter varies.  
+- Creates a dummy agent, computes `p_send` for a range of beta values, and prints the results with values rounded to three significant figures.
+
+**utility_scripts/find_optimal_temperature.py**  
+- Helps determine an optimal softmax temperature for converting state vectors into probability distributions.  
+- Loads a JSON file, selects random state vectors, applies softmax over a range of temperatures, and computes pairwise Jensen-Shannon Divergence (JSD).  
+- Produces plots of probability distributions and average JSD versus temperature, along with suggestions for selecting the optimal temperature.
+
+**utility_scripts/hdbscan_gridsearch.py**  
+- Performs a grid search over HDBSCAN hyperparameters (min_cluster_size and min_samples) for each unique ABM parameter set found in the simulation results.  
+- Computes silhouette scores and cluster counts for each parameter combination, aggregates the results, and prints a summary of the best hyperparameters based on the mean silhouette score.
 
 ---
 
 ## Script Interdependencies
 
-- **CG\_source.py**: Foundational script. Nearly every other script relies on **Agent**, **Config**, or **RecordBook** definitions from here.
-- **natural\_simulation.py**: Main simulation driver. Imports `Config`, `Agent`, `RecordBook` from `CG_source.py`.
-- **run\_parallel\_simulation.py**: Orchestrates simulation parameter sweeps in parallel, calling `run_simulation_with_params` from `natural_simulation.py`.
-- **surviving\_information.py**: Summarizes how many pieces of info survive in the final states. It’s used by:
-  - **analyze\_two\_params.py** (importing `count_surviving_info`)
-  - **plot\_surviving\_by\_m.py** (importing `count_surviving_info`)
-- **pairwise\_similarity.py**: Builds pairwise distance matrices from final agent states. Depended on by:
-  - **analyze\_clusters.py** and **hdbscan\_gridsearch.py**, which use these distance matrices for HDBSCAN clustering.
-- **plot\_utils.py**: Visualization helpers for cluster analysis. Called by **analyze\_clusters.py**, **hdbscan\_gridsearch.py**, etc.
-- **find\_optimal\_temperature.py**: Independent script that can be used after simulations to explore how temperature scaling affects distribution shape and Jensen-Shannon Divergence across agent vectors.
+- **CG_source.py:**  
+  This foundational script defines key classes—such as `Config`, `Agent`, and `RecordBook`—as well as various helper functions and metrics for comparing agent state vectors. Nearly every other script depends on these definitions for simulation setup and agent behavior.
+
+- **natural_simulation.py:**  
+  Serves as the core simulation driver. It imports definitions from `CG_source.py` to create agents, initialize the network, simulate interactions over timesteps, and record both raw and moving average state vectors. Many scripts (including single-run, parallel, and sweep drivers) invoke functions from this module to run simulations.
+
+- **run_parallel_simulation.py:**  
+  Leverages `natural_simulation.py` (and by extension `CG_source.py`) to run multiple simulations concurrently via Python’s multiprocessing. It enables parallel parameter sweeps and efficiently generates numerous simulation outputs.
+
+- **sweep.py:**  
+  Uses the parameter grid defined in `config.py` to systematically explore different simulation configurations. For each combination, it calls `run_simulation_with_params` from `natural_simulation.py` and saves the output, facilitating a comprehensive parameter sweep.
+
+- **simulation_record.py:**  
+  Similar to `run.py`, but with added functionality to record the complete time series (raw state vectors) for each agent. This detailed output is useful for in-depth post-simulation analysis.
+
+- **pairwise_similarity.py:**  
+  Converts agents’ final state vectors into probability distributions (using a softmax function with an adjustable temperature) and computes NxN distance or similarity matrices using metrics such as Jensen-Shannon Divergence, Euclidean distance, or cosine similarity. Several analysis and visualization scripts depend on these matrices.
+
+- **analyze_clusters.py:**  
+  Imports functions from `pairwise_similarity.py` to build distance matrices and then applies HDBSCAN clustering to determine how many clusters are formed in the final agent states (ignoring noise). It also uses helper functions from `plot_utils.py` for visualization.
+
+- **hdbscan_gridsearch.py:**  
+  Performs a grid search over HDBSCAN hyperparameters (e.g., min_cluster_size and min_samples) for each unique set of simulation parameters. It uses the distance matrices computed by `pairwise_similarity.py` and aggregates clustering performance (e.g., silhouette scores) to identify optimal settings.
+
+- **analyze_two_params.py:**  
+  Focuses on the joint effect of two selected ABM parameters on the survival of information. It relies on `surviving_information.py` to compute survival counts from simulation outputs and then generates 2D heatmaps to visualize the interplay between the two parameters.
+
+- **plot_surviving_by_m.py:**  
+  Analyzes how the number of surviving pieces of information changes with the state vector length (`m`). It uses functions from `surviving_information.py` to compute survival counts and then plots these counts (with confidence intervals) as a function of `m`.
+
+- **surviving_information.py:**  
+  Provides core functions to determine which pieces of information “survive” in the final agent state vectors based on a threshold and a minimum fraction criterion. This module is imported by analysis scripts (e.g., `analyze_two_params.py` and `plot_surviving_by_m.py`) to quantify information survival.
+
+- **plot_utils.py:**  
+  Contains generic plotting helper functions used across multiple analysis scripts (such as heatmaps for grid searches and line plots for cluster versus parameter relationships).
+
+- **interpreter.py:**  
+  Loads simulation output JSON files and generates scatter plots of agent state vectors at specified timesteps. It supports both raw data and moving average data, with optional softmax transformation, to aid in visual inspection of simulation dynamics.
+
+- **plot_distance_matrix.py:**  
+  Uses `pairwise_similarity.py` to compute a distance matrix from the final moving average state vectors and visualizes this matrix as a heatmap using Seaborn.
+
+- **plot_violin.py:**  
+  Reads simulation results and generates violin or box plots to visualize the distribution of certainty values across each dimension of the agent state vectors.
+
+- **run.py:**  
+  A simple driver script that runs a single simulation using parameters defined in `config.py`. It calls `run_simulation_with_params` from `natural_simulation.py` and saves the final results as a JSON file.
+
+- **survival_per_parameter.py:**  
+  Analyzes how a chosen “interesting parameter” (and optionally a secondary parameter) affects the proportion of surviving information. It imports functions from `surviving_information.py` to compute survival counts and then generates a line plot (with 95% confidence intervals) to summarize the impact.
+
+- **utility_scripts/find_beta.py:**  
+  A utility script that creates a dummy agent to analyze how the sending probability distribution (`p_send`) changes over a range of beta (rationality) values. It prints the computed probabilities rounded to three significant figures.
+
+- **utility_scripts/find_optimal_temperature.py:**  
+  Assists in selecting an optimal softmax temperature for converting state vectors into probability distributions. It loads simulation outputs, applies softmax over a range of temperatures, computes pairwise Jensen-Shannon Divergence among the resulting distributions, and produces corresponding plots and suggestions.
+
+- **utility_scripts/hdbscan_gridsearch.py:**  
+  Executes a grid search over HDBSCAN hyperparameters for each unique ABM parameter set found in the simulation results. It aggregates metrics (such as silhouette scores and cluster counts) to help identify the best clustering settings.
 
 ---
 
