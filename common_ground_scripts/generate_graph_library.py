@@ -26,9 +26,9 @@ import networkx as nx
 def generate_graph_library(
     output_dir="graphs_library_high_cluster",
     library_size=500,
-    n=50,
+    n=500,
     m=6,
-    p=0.3
+    p=0.9
 ):
     """
     Generates a library of power-law cluster graphs and saves them via pickle.
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     generate_graph_library(
         output_dir="graphs_library_50",
         library_size=1,
-        n=50,
+        n=500,
         m=6,
-        p=0.3
+        p=0.9
     )
