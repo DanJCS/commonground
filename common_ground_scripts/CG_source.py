@@ -395,37 +395,25 @@ class RecordBook:
         # Storing a copy so future modifications to the agent’s state do not affect past records
         self.records[agent.name].append(agent.state_vector.copy())
 
+    ### CHANGED: Updated compute_moving_average_series to use the average from t0 to t when t < avg_window.
     def compute_moving_average_series(self, avg_window: int) -> None:
         """
         Compute and store the moving average of each agent's state vectors over a sliding
-        window of size `avg_window`. The resulting arrays are appended to
-        `self.movingavg[agent.name]`.
-
-        For each timestep `t`:
-        - If `t >= avg_window`, we sum the agent's last `avg_window` recorded vectors
-            (from `self.records[agent.name][t - avg_window : t]`) and then divide by
-            `avg_window`.
-        - If `t < avg_window`, we store a zero vector of the same length as the state vector
-            (because we haven't accumulated `avg_window` data points yet).
-
-        :param avg_window: Number of timesteps used to compute the sliding average (window size).
-        :type avg_window: int
-        :return: None (results are stored in `self.movingavg`).
-        :rtype: None
+        window of size `avg_window`. For timesteps t < avg_window, the moving average is computed
+        from time 0 to t. For t >= avg_window, it is computed over the last avg_window recorded states.
+        The resulting arrays are appended to self.movingavg[agent.name].
         """
         for agent in self.agentlist:
-            # agent.name is the key in both self.records and self.movingavg
-            for t in range(self.timesteps):
+            num_records = len(self.records[agent.name])
+            for t in range(num_records):
                 if t >= avg_window:
-                    # Optional: Use NumPy sum for performance if each record entry is a NumPy array.
-                    slice_data = self.records[agent.name][t - avg_window : t]  # list of np.ndarrays
-                    running_total = np.sum(slice_data, axis=0)  # sum along axis=0
+                    slice_data = self.records[agent.name][t - avg_window: t]
+                    running_total = np.sum(slice_data, axis=0)
                     self.movingavg[agent.name].append(running_total / avg_window)
                 else:
-                    # For the early timesteps where we don't have avg_window data,
-                    # we store a zero vector of the same shape as agent.state_vector
-                    zero_vector = np.zeros(len(agent.state_vector))
-                    self.movingavg[agent.name].append(zero_vector)
+                    slice_data = self.records[agent.name][0: t + 1]
+                    running_total = np.sum(slice_data, axis=0)
+                    self.movingavg[agent.name].append(running_total / (t + 1))
                     
     def compute_moving_average(self, avg_window: int) -> None:
         """
