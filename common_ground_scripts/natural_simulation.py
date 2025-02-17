@@ -34,7 +34,7 @@ from CG_source import *
 
 
 ### CHANGED: Added new parameter "record_interval" to allow recording at defined intervals.
-def run_simulation_with_params(params, repetition_index, include_records=True, record_interval=10):
+def run_simulation_with_params(params, repetition_index, include_records=True, record_interval=100):
     """
     Runs the simulation with the provided parameters and repetition index.
 
@@ -134,9 +134,14 @@ def run_simulation_with_params(params, repetition_index, include_records=True, r
     ### CHANGED: If include_records is True, store the entire time-series under the "records" key.
     if include_records:
         result["records"] = {
+            agent.name: [v.tolist() if isinstance(v, np.ndarray) else v for v in recordbook.records[agent.name]]
+            for agent in agentlist
+        }
+        result["moving_average_records"] = {  # Add this block
             agent.name: [v.tolist() if isinstance(v, np.ndarray) else v for v in recordbook.movingavg[agent.name]]
             for agent in agentlist
         }
+
 
     return result
 

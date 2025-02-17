@@ -1,302 +1,214 @@
 #!/usr/bin/env python3
 """
-File: pairwise_similarity.py
+File: natural_simulation.py
 
 Summary:
-    Computes pairwise distance (or similarity) matrices among agents (nodes) based on their
-    final state vectors. Depending on the chosen metric, the state vectors may be first converted
-    into probability distributions via softmax. Supported metrics include:
-      - Jensen-Shannon Divergence ("jsd")
-      - Euclidean distance ("euclidean")
-      - 1 - Cosine similarity ("cosine")
-      - Direct normalized Euclidean similarity ("euclidean_direct_normalised")
-        <-- This new metric operates directly on raw state vectors without softmax conversion.
-        
-    The script can process multiple simulation JSON files in parallel.
-    
-Key Functions:
-    * load_final_moving_avg(json_file: str) -> dict:
-        Loads a JSON file and returns the 'final_moving_avg' data as a dictionary
-        { agent_name -> np.array([...]) }. Returns None if missing.
-        
-    * softmax(x, temperature=1.0, epsilon=1e-15) -> np.ndarray:
-        Converts an array of values into a probability distribution (optionally temperature-scaled).
-        
-    * build_distance_matrix(final_moving_avg, method="jsd", temperature=1.0) -> (np.ndarray, list):
-        Given the final_moving_avg dict, first either converts each agent’s vector to a probability distribution
-        (using softmax) or, if method is "euclidean_direct_normalised", uses the raw vectors.
-        Then computes an NxN pairwise matrix using the specified method.
-        
-    * process_single_file(args) -> (str, np.ndarray, list):
-        A parallelizable worker function that:
-          1) Loads a single JSON result.
-          2) Builds the NxN distance matrix using build_distance_matrix.
-          3) Optionally saves the matrix as a .npy file in the output directory.
-        Returns the filename, distance matrix, and agent name list.
-        
-    * precompute_distance_for_directory(...):
-        Iterates over all .json files in the given directory and computes (and optionally saves)
-        the NxN distance matrices in parallel.
-        
-Usage Example:
-    python pairwise_similarity.py <input_dir> [--method jsd] [--temperature 1.0] [--output_dir ./dist_mats] [--n_jobs 4]
+    Provides the main simulation driver for the ABM.
+    The simulation output includes:
+      - "final_x_vectors": final state vectors for each agent (as lists)
+      - "final_moving_avg": the final moving average vector (a sliding-window average).
+      - Optionally, if include_records is True, "records": the raw state vectors over time.
+
+Usage:
+    python natural_simulation.py
+    # or
+    from natural_simulation import run_simulation_with_params
+    result = run_simulation_with_params(params, repetition_index, include_records=True, record_interval=10)
 """
 
-import os
-import json
 import math
+import os
+import random
+import json
+import pickle
+
+import networkx as nx
 import numpy as np
-from typing import Dict, Tuple, List
-from multiprocessing import Pool
-from tqdm import tqdm
-from scipy.spatial.distance import jensenshannon
 
-###############################################################################
-# 1. Loading final_moving_avg from JSON
-###############################################################################
-def load_final_moving_avg(json_file: str) -> Dict[str, np.ndarray]:
+from itertools import product
+from datetime import datetime
+from CG_source import Config, Agent, RecordBook, beta_extended
+
+
+### CHANGED: Modified docstring to reflect that "records" now stores raw state vectors.
+def run_simulation_with_params(params, repetition_index, include_records=True, record_interval=10):
     """
-    Load a single JSON file (one simulation result) and extract 'final_moving_avg'.
+    Runs the simulation with the provided parameters and repetition index.
 
-    Returns a dict: { agent_name: np.array([...]) }
-    or None if JSON is missing the required fields.
+    Args:
+        params (dict): Simulation parameters, including n, m, timesteps, etc.
+        repetition_index (int): Repetition index for tracking multiple runs.
+        include_records (bool): If True, store the raw state vectors at specified intervals.
+        record_interval (int): Timestep interval at which to record raw state vectors.
+
+    Returns:
+        dict: {
+          "params": {...},                 # The parameters used
+          "repetition": int,              # The repetition index
+          "graph_file": str,              # Which graph was used
+          "final_x_vectors": {...},       # Final state vectors as lists
+          "final_moving_avg": {...},      # Final moving average (sliding window)
+          "records": {...} (optional)     # Raw state vectors if include_records=True
+        }
     """
-    if not os.path.exists(json_file):
-        print(f"[Warning] File not found: {json_file}")
-        return None
+    print(f"Running simulation with parameters: {params}, repetition: {repetition_index}")
 
-    with open(json_file, "r") as f:
-        data = json.load(f)
-
-    if "final_moving_avg" not in data:
-        print(f"[Warning] 'final_moving_avg' missing in {json_file}")
-        return None
-
-    fmavg = {}
-    for agent_name, vec in data["final_moving_avg"].items():
-        fmavg[agent_name] = np.array(vec, dtype=float)
-    return fmavg
-
-###############################################################################
-# 2. Softmax utility (with temperature)
-###############################################################################
-def softmax(x, temperature=0.25, epsilon=1e-15):
-    """
-    Compute the softmax of vector x with temperature T.
-
-    If x is all zeros, we return a uniform distribution.
-    
-    (T = 1/beta)
-    """
-    if temperature <= 0:
-        raise ValueError("Temperature must be > 0.")
-    x = np.array(x, dtype=float)
-    scaled_x = x / temperature
-    max_val = np.max(scaled_x)
-    exps = np.exp(scaled_x - max_val)
-    return exps / np.sum(exps)
-
-###############################################################################
-# 3. Distance/Similarity metrics on probability vectors
-###############################################################################
-def _kl_divergence(p, q, epsilon=1e-10):
-    p_safe = np.clip(p, epsilon, None)
-    q_safe = np.clip(q, epsilon, None)
-    p_safe /= p_safe.sum()
-    q_safe /= q_safe.sum()
-    return np.sum(p_safe * np.log(p_safe / q_safe))
-
-def js_divergence(p, q, epsilon=1e-10):
-    """Jensen–Shannon Divergence."""
-    m = 0.5 * (p + q)
-    val = 0.5 * _kl_divergence(p, m) + 0.5 * _kl_divergence(q, m)
-    if val < 0:
-        print(f"WARNING: Negative value encountered in JSD calculation: {val}")
-    return math.sqrt(max(val, 0.0))
-
-def euclidean_distance(p, q):
-    """Euclidean distance."""
-    return np.linalg.norm(p - q)
-
-def one_minus_cosine(p, q, epsilon=1e-15):
-    """
-    1 - cosine_similarity -> a proper distance (lower => more similar).
-    """
-    p_norm = np.linalg.norm(p) + epsilon
-    q_norm = np.linalg.norm(q) + epsilon
-    cos_sim = np.dot(p, q) / (p_norm * q_norm)
-    return 1.0 - cos_sim
-
-def _metric_euclidean_direct_normalised(u, v):
-    """
-    Computes the direct Euclidean distance between two agents' state vectors,
-    normalizes it by dividing by 2*m, and returns the similarity as 1 - normalized distance.
-    """
-    d = np.linalg.norm(u.state_vector - v.state_vector)
-    m = len(u.state_vector)
-    d_norm = d / (2 * m)
-    similarity = 1 - d_norm
-    return similarity
-
-# Dictionary to hold metric functions.
-try:
-    _METRICS
-except NameError:
-    _METRICS = {}
-_METRICS["euclidean_direct_normalised"] = _metric_euclidean_direct_normalised
-
-###############################################################################
-# 4. Build NxN distance matrix
-###############################################################################
-def build_distance_matrix(final_moving_avg, method="jsd", temperature=1.0):
-    """
-    Given final_moving_avg: { agent_name: np.array([...]) },
-    return an NxN matrix of distances (or similarities) among the agents.
-    
-    For most methods, each agent's state vector is first converted to a probability distribution
-    via softmax. However, if the chosen method is "euclidean_direct_normalised", raw state vectors
-    are used directly.
-    """
-    agent_names = sorted(final_moving_avg.keys())
-    n = len(agent_names)
-    
-    # Determine whether to use raw state vectors or softmax probabilities.
-    if method.lower() == "euclidean_direct_normalised":
-        vectors = {}
-        for name in agent_names:
-            vec = final_moving_avg[name]
-            try:
-                vec = np.array(vec, dtype=float)
-            except Exception as e:
-                raise ValueError(f"Cannot convert vector for agent '{name}' to a numpy array: {e}")
-            vectors[name] = vec
+    # If no graph is provided, load from 'singular_graph' folder
+    if "graph" not in params or params["graph"] is None:
+        G, graph_file = load_random_graph("singular_graph")
     else:
-        prob_distributions = {}
-        for name in agent_names:
-            vec = final_moving_avg[name]
-            try:
-                vec = np.array(vec, dtype=float)
-            except Exception as e:
-                raise ValueError(f"Cannot convert vector for agent '{name}' to a numpy array: {e}")
-            prob_distributions[name] = softmax(vec, temperature=temperature)
-    
-    # Initialize the distance matrix.
-    dist_mat = np.zeros((n, n), dtype=float)
-    
-    # Compute pairwise distances/similarities.
-    for i in range(n):
-        for j in range(i + 1, n):
-            if method.lower() == "euclidean_direct_normalised":
-                p_i = vectors[agent_names[i]]
-                p_j = vectors[agent_names[j]]
-                # Compute normalized Euclidean similarity directly.
-                d = np.linalg.norm(p_i - p_j)
-                m_val = len(p_i)
-                d_norm = d / (2 * m_val)
-                sim = 1 - d_norm
-                dist = sim
-            else:
-                p_i = prob_distributions[agent_names[i]]
-                p_j = prob_distributions[agent_names[j]]
-                if method.lower() == "jsd":
-                    dist = js_divergence(p_i, p_j)
-                elif method.lower() == "euclidean":
-                    dist = euclidean_distance(p_i, p_j)
-                elif method.lower() == "cosine":
-                    dist = one_minus_cosine(p_i, p_j)
-                else:
-                    raise ValueError(f"Unknown method {method}")
-            dist_mat[i, j] = dist
-            dist_mat[j, i] = dist
+        G = params["graph"]
+        graph_file = "Provided Graph"
 
-    return dist_mat, agent_names
-
-###############################################################################
-# 5. Function to process a single JSON file (for parallel usage)
-###############################################################################
-def process_single_file(args):
-    """
-    Worker function for parallel distance computation.
-    :param args: (json_filename, input_dir, method, temperature, output_dir)
-    :return: (json_filename, distance_matrix, agent_names)
-    """
-    json_filename, input_dir, method, temperature, output_dir = args
-    fullpath = os.path.join(input_dir, json_filename)
-
-    fmavg = load_final_moving_avg(fullpath)
-    if fmavg is None:
-        return (json_filename, None, None)
-
-    dist_mat, agents = build_distance_matrix(fmavg, method=method, temperature=temperature)
-
-    if output_dir:
-        base = os.path.splitext(json_filename)[0]
-        npy_path = os.path.join(output_dir, f"{base}_{method}_dist.npy")
-        np.save(npy_path, dist_mat)
-
-    return (json_filename, dist_mat, agents)
-
-###############################################################################
-# 6. Parallel routine for a directory of JSONs (using multiprocessing + tqdm)
-###############################################################################
-def precompute_distance_for_directory(
-    input_dir: str,
-    method="jsd",
-    temperature=1.0,
-    output_dir=None,
-    n_jobs=1
-):
-    """
-    For each .json in input_dir, compute the distance matrix and optionally save it as a .npy file.
-    Parallelizes the computation using multiprocessing.
-    
-    :param input_dir: Directory containing JSON result files.
-    :param method: 'jsd', 'euclidean', 'cosine', or 'euclidean_direct_normalised'
-    :param temperature: Temperature parameter for softmax conversion.
-    :param output_dir: Directory to save .npy files (if None, skip saving).
-    :param n_jobs: Number of parallel processes.
-    :return: List of tuples (json_filename, distance_matrix, agent_names) for each JSON file.
-    """
-    if not os.path.exists(input_dir):
-        raise FileNotFoundError(f"Input dir not found: {input_dir}")
-
-    file_list = [f for f in os.listdir(input_dir) if f.endswith(".json")]
-    file_list = sorted(file_list)
-
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-
-    tasks = []
-    for json_filename in file_list:
-        tasks.append((json_filename, input_dir, method, temperature, output_dir))
-
-    results = []
-    print(f"Computing distances for {len(tasks)} JSON files using {n_jobs} processes.")
-    with Pool(processes=n_jobs) as pool:
-        with tqdm(total=len(tasks), desc="Computing Distances") as pbar:
-            for res in pool.imap_unordered(process_single_file, tasks):
-                results.append(res)
-                pbar.update(1)
-
-    return results
-
-###############################################################################
-# 7. Main CLI usage
-###############################################################################
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("input_dir", help="Directory with JSON files")
-    parser.add_argument("--method", default="jsd", help="Distance metric: jsd, euclidean, cosine, or euclidean_direct_normalised")
-    parser.add_argument("--temperature", type=float, default=1.0)
-    parser.add_argument("--output_dir", type=str, default=None)
-    parser.add_argument("--n_jobs", type=int, default=1, help="Number of parallel processes")
-    args = parser.parse_args()
-
-    precompute_distance_for_directory(
-        args.input_dir,
-        method=args.method,
-        temperature=args.temperature,
-        output_dir=args.output_dir,
-        n_jobs=args.n_jobs
+    # Create config and agent list
+    config = Config(
+        n=params["n"],
+        m=params["m"],
+        timesteps=params["timesteps"],
+        bi=params["bi"],
+        bj=params["bj"],
+        a=params["a"],
+        alpha=params["alpha"],
+        eps=params["eps"],
+        sigma=params["sigma"],
+        zeta=params["zeta"],
+        eta=params["eta"],
+        gamma=params["gamma"],
+        G=G,
     )
+    agentlist = create_agent_list(
+        config.n,
+        config.m,
+        params.get("alpha_dist", "static"),
+        config.a,
+        config.alpha,
+        config.bi,
+        config.bj,
+        config.eps,
+    )
+    recordbook = RecordBook(agentlist, config)
+
+    # Simulation loop
+    for t in range(config.timesteps):
+        for i, agent in enumerate(agentlist):
+            neigh_list = list(config.G.neighbors(i))
+            if neigh_list and random.random() < agent.a:
+                j = random.choice(neigh_list)
+                agent.update_agent_t(
+                    agentlist[j],
+                    sigma=config.sigma,
+                    gamma=config.gamma,
+                    zeta=config.zeta,
+                    eta=config.eta
+                )
+                agent.reset_accepted()
+                agent.update_probabilities()
+                agentlist[j].update_probabilities()
+
+        # CHANGED: If include_records, store the *raw* state vectors at intervals
+        if include_records and (record_interval is None or t % record_interval == 0):
+            for agent in agentlist:
+                recordbook.record_agent_state(agent)
+
+    # After the loop, compute the final moving average
+    # We want a sliding-window average of size int(timesteps*0.04)
+    avg_window = max(int(config.timesteps * 0.04), 1)
+
+    ### If we never recorded raw states (include_records=False),
+    ### we still need at least one record to compute a final average:
+    if not include_records:
+        for agent in agentlist:
+            recordbook.record_agent_state(agent)
+
+    recordbook.compute_moving_average_series(avg_window)
+
+    # Prepare final outputs
+    final_x_vectors = {
+        agent.name: agent.state_vector.tolist() for agent in agentlist
+    }
+
+    # The "final_moving_avg" is the last sliding-window average in recordbook.movingavg
+    final_moving_avg = {}
+    for agent in agentlist:
+        final_array = recordbook.movingavg[agent.name][-1]
+        if isinstance(final_array, np.ndarray):
+            final_moving_avg[agent.name] = final_array.tolist()
+        else:
+            final_moving_avg[agent.name] = final_array
+
+    result = {
+        "params": params,
+        "repetition": repetition_index,
+        "graph_file": graph_file,
+        "final_x_vectors": final_x_vectors,
+        "final_moving_avg": final_moving_avg,
+    }
+
+    ### CHANGED: If include_records is True, store the *raw* recorded states in "records"
+    if include_records:
+        result["records"] = {
+            agent.name: [
+                arr.tolist() if isinstance(arr, np.ndarray) else arr
+                for arr in recordbook.records[agent.name]
+            ]
+            for agent in agentlist
+        }
+
+    return result
+
+
+def load_random_graph(graph_dir="graphs_library"):
+    """
+    Randomly selects one of the pickle files in `graph_dir`
+    and loads it as a NetworkX Graph.
+    """
+    import os
+    import random
+    import pickle
+
+    file_list = [f for f in os.listdir(graph_dir) if f.endswith(".pkl")]
+    if not file_list:
+        raise FileNotFoundError(f"No .pkl files found in {graph_dir}")
+    chosen_file = random.choice(file_list)
+    path = os.path.join(graph_dir, chosen_file)
+    with open(path, "rb") as f:
+        G = pickle.load(f)
+    print(f"Loaded graph from: {chosen_file}")
+    return G, chosen_file
+
+
+def create_agent_list(n, m, alpha_dist, a, alpha, bi, bj, eps):
+    """
+    Creates a list of Agent objects, each with an initial state_vector drawn from beta_extended.
+    alpha_dist can be 'beta', 'static', or 'uniform' for alpha assignment.
+    """
+    Agents = []
+    info_list = [beta_extended(n) for _ in range(m)]
+    if alpha_dist == "beta":
+        alpha_list = np.random.beta(3.5, 14, n)
+    elif alpha_dist == "static":
+        alpha_list = [alpha] * n
+    elif alpha_dist == "uniform":
+        alpha_list = np.random.uniform(0, 1, n)
+    else:
+        alpha_list = [alpha] * n  # fallback
+
+    for i in range(n):
+        agent = Agent(
+            name=f"Agent_{i}",
+            a=a,
+            alpha=alpha_list[i],
+            bi=bi,
+            bj=bj,
+            eps=eps,
+            state_vector=np.array([info_list[idx][i] for idx in range(m)]),
+            local_similarity=0.0
+        )
+        Agents.append(agent)
+    return Agents
+
+
+if __name__ == "__main__":
+    # For direct usage: python natural_simulation.py
+    # Typically you'd import run_simulation_with_params into other scripts (e.g., run.py).
+    pass

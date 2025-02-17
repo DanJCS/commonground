@@ -409,7 +409,7 @@ class RecordBook:
                 if t >= avg_window:
                     slice_data = self.records[agent.name][t - avg_window: t]
                     running_total = np.sum(slice_data, axis=0)
-                    self.movingavg[agent.name].append(running_total / avg_window)
+                    self.movingavg[agent.name].append(running_total / t)
                 else:
                     slice_data = self.records[agent.name][0: t + 1]
                     running_total = np.sum(slice_data, axis=0)

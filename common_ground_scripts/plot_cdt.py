@@ -153,16 +153,36 @@ def plot_cdt_and_rcc(data_by_params, output_dir):
         plt.figure(figsize=(10, 6))
 
         # Plot CDT
-        plt.plot(times_cdt, values_cdt, linestyle='--', color="r", label="Mean Centroid Distance")
+        plt.plot(times_cdt, values_cdt, linestyle='--', color="r",marker=".", label="Mean Centroid Distance",alpha=0.5)
 
         # Plot RCC
-        plt.plot(times_rcc, values_rcc, linestyle='-', color="b", label="Relative Centroid Change")
+        plt.plot(times_rcc, values_rcc, linestyle='--', color="b",marker=".", label="Relative Centroid Change", alpha=0.5)
+
+        # Find and mark the convergence point (based on RMCD)
+        epsilon = 0.005
+        convergence_time = None
+        for t, rcc_val in zip(times_rcc, values_rcc):
+            if rcc_val < epsilon:
+                convergence_time = t
+                break
+
+        if convergence_time is not None:
+
+            plt.plot(
+                convergence_time,
+                rcc_list[convergence_time],
+                marker="o",
+                markersize=3,
+                color="purple",
+                alpha=0.5,
+                label=f"Convergence at: t={convergence_time} ",
+            )  # Mark the intersection
 
         plt.xlabel("Timestep")
         plt.ylabel("Value")  # More general y-axis label
         plt.title(f"Convergence Time-series (m={m_value})")  # Simplified title
         plt.grid(True)
-        plt.ylim(-0.025, 0.200)  # Fixed y-axis limits
+        plt.ylim(-0.025, 0.255)  # Fixed y-axis limits
         plt.legend()
         plt.tight_layout()
 
@@ -178,7 +198,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate CDT and RCC plots from simulation JSON files.")
     parser.add_argument("input_dir", nargs="?", default="simulation_results",
                         help="Directory containing simulation JSON files (default: simulation_results).")
-    parser.add_argument("--record_interval", type=int, default=10,
+    parser.add_argument("--record_interval", type=int, default=100,
                         help="Timestep interval used for recording state vectors (default: 10).")
     parser.add_argument("--output_dir", type=str, default="convergence_plots",
                         help="Directory to save the generated plots.")
